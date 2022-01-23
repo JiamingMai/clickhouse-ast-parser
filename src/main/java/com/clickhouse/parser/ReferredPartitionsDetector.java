@@ -334,6 +334,24 @@ public class ReferredPartitionsDetector extends AstVisitor {
             Identifier identifier = funcColExpr.getName();
             String functionName = identifier.getName();
             switch (functionName) {
+                case "toDateTime": {
+                    List<ColumnExpr> args = funcColExpr.getArgs();
+                    ColumnExpr arg = args.get(0);
+                    if (arg instanceof LiteralColumnExpr) {
+                        LiteralColumnExpr literalColumnExpr = (LiteralColumnExpr) arg;
+                        value = literalColumnExpr.getLiteral().asStringWithoutQuote();
+                    } else if (args instanceof FunctionColumnExpr) {
+                        value = translateDateFunction((FunctionColumnExpr) args);
+                    }
+
+                    try {
+                        long longVal = Long.parseLong(value);
+                        value = DateUtil.formatDate(new Date(Long.parseLong(value + "000")));
+                    } catch (Exception e) {
+                        log.error("", e);
+                    }
+                }
+                break;
                 case "toDate":
                     List<ColumnExpr> args = funcColExpr.getArgs();
                     ColumnExpr arg = args.get(0);
