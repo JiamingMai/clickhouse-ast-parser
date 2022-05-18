@@ -71,6 +71,13 @@ public class CstVisitor extends ClickHouseParserBaseVisitor {
     }
 
     @Override
+    public Object visitTableColumnPropertyExpr(ClickHouseParser.TableColumnPropertyExprContext ctx) {
+        ColumnExpr expr = (ColumnExpr) visit(ctx.columnExpr());
+        TableColumnPropertyExpr property = new TableColumnPropertyExpr(TableColumnPropertyExpr.PropertyType.SIMPLE, expr);
+        return property;
+    }
+
+    @Override
     public Object visitTableColumnDfnt(ClickHouseParser.TableColumnDfntContext ctx) {
         TableColumnPropertyExpr property = null;
         if (null != ctx.tableColumnPropertyExpr()) {
@@ -507,6 +514,14 @@ public class CstVisitor extends ClickHouseParserBaseVisitor {
         return createTableQuery;
     }
 
+    @Override
+    public Object visitSubqueryClause(ClickHouseParser.SubqueryClauseContext ctx) {
+        if (null != ctx.selectUnionStmt()) {
+            return visitSelectUnionStmt(ctx.selectUnionStmt());
+        }
+        return super.visitSubqueryClause(ctx);
+    }
+
     // SelectUnionQuery
     @Override
     public Object visitSelectUnionStmt(ClickHouseParser.SelectUnionStmtContext ctx) {
@@ -525,6 +540,31 @@ public class CstVisitor extends ClickHouseParserBaseVisitor {
             query.appendSelect((SelectStatement) visit(ctx.selectStmt()));
         } else if (null != ctx.selectUnionStmt()) {
             query = (SelectUnionQuery) visit(ctx.selectUnionStmt());
+        } else if (null != ctx.children && !ctx.children.isEmpty()) {
+            StringBuffer text = new StringBuffer();
+            for (int i = 0; i < ctx.children.size(); i++) {
+                text.append(ctx.children.get(i).getText());
+            }
+            String database = null;
+            String table = text.toString();
+            if (text.toString().contains(".")) {
+                String[] databaseAndTable = text.toString().split("\\.");
+                database = databaseAndTable[0];
+                table = databaseAndTable[1];
+            }
+            TableIdentifier tableIdentifier = new TableIdentifier(new Identifier(database), new Identifier(table));
+            SelectStatement selectStatement = new SelectStatement(false, SelectStatement.ModifierType.NONE, false, null);
+            JoinExpr joinExpr = JoinExpr.createTableExpr(TableExpr.createIdentifier(tableIdentifier), new SampleClause(null, null), true);
+            FromClause fromClause = new FromClause(joinExpr);
+            selectStatement.setFromClause(fromClause);
+            List<ColumnExpr> columnExprs = new ArrayList<>();
+            ColumnExpr columnExpr = ColumnExpr.createAsterisk(tableIdentifier, false);
+            columnExprs.add(columnExpr);
+            selectStatement.setExprs(columnExprs);
+            List<SelectStatement> selectStatements = new ArrayList<>();
+            selectStatements.add(selectStatement);
+            query = new SelectUnionQuery();
+            query.setStatements(selectStatements);
         }
         return query;
     }
@@ -688,6 +728,24 @@ public class CstVisitor extends ClickHouseParserBaseVisitor {
         return settingsClause;
     }
 
+    @Override
+    public Object visitSettingExpr(ClickHouseParser.SettingExprContext ctx) {
+        Identifier identifier = (Identifier) visitIdentifier(ctx.identifier());
+        Literal literal = (Literal) visit(ctx.literal());
+        SettingExpr settingExpr = new SettingExpr(identifier, literal);
+        return settingExpr;
+    }
+
+    @Override
+    public Object visitSettingExprList(ClickHouseParser.SettingExprListContext ctx) {
+        List<SettingExpr> settingExprs = new ArrayList<>();
+        for (ClickHouseParser.SettingExprContext settingExprContext : ctx.settingExpr()) {
+            SettingExpr settingExpr = (SettingExpr) visitSettingExpr(settingExprContext);
+            settingExprs.add(settingExpr);
+        }
+        return settingExprs;
+    }
+
     // Column Expression
     @Override
     public Object visitColumnArgExpr(ClickHouseParser.ColumnArgExprContext ctx) {
@@ -819,7 +877,7 @@ public class CstVisitor extends ClickHouseParserBaseVisitor {
 
     @Override
     public Object visitColumnExprCase(ClickHouseParser.ColumnExprCaseContext ctx) {
-        boolean hasCaseExpr = (null != ctx.ELSE() && ctx.columnExpr().size() % 2 == 0)  ||
+        boolean hasCaseExpr = (null != ctx.ELSE() && ctx.columnExpr().size() % 2 == 0) ||
                 (null == ctx.ELSE() && ctx.columnExpr().size() % 2 == 1);
         Identifier name = new Identifier(hasCaseExpr ? "caseWithExpression" : "multiIf");
         List<ColumnExpr> args = new ArrayList<>();

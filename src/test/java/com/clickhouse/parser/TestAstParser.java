@@ -45,4 +45,31 @@ public class TestAstParser {
         log.info("It takes " + (end - start) + " ms");
     }
 
+    @Test
+    public void testDistributedTableInfoDetector2() {
+        String sql = "CREATE TABLE mydb.mytb (uuid UUID DEFAULT generateUUIDv4(), cktime DateTime DEFAULT now() COMMENT 'c', openid String, username String, appid String, from_channel String, source_channel String, source String, regtime DateTime, brandid String, devicecode String, actiontime DateTime, ismingamelogin String, version String, platform String, project String, plat String, source_openid String COMMENT 'a', event Int16 COMMENT 'b') ENGINE = ReplicatedMergeTree('/clickhouse/mydb/mytb/{shard}', '{replica}') PARTITION BY toYYYYMM(cktime) ORDER BY (regtime, appid, openid) SETTINGS index_granularity = 8192";
+        DistributedTableInfoDetector distributedTableInfoDetector = new DistributedTableInfoDetector();
+        String clusterName = distributedTableInfoDetector.searchCluster(sql);
+        log.info(clusterName);
+        long start = System.currentTimeMillis();
+        String tableFullName = distributedTableInfoDetector.searchLocalTableFullName(sql);
+        long end = System.currentTimeMillis();
+        log.info(tableFullName);
+        log.info("It takes " + (end - start) + " ms");
+    }
+
+    @Test
+    public void testDistributedTableInfoDetector3() {
+        String sql = "CREATE TABLE my_db.my_tbl on cluster my_cluster Engine = Distributed('my_cluster', 'my_db', 'my_tbl_local', rand()) as my_db.my_tbl_local";
+        DistributedTableInfoDetector distributedTableInfoDetector = new DistributedTableInfoDetector();
+        String clusterName = distributedTableInfoDetector.searchCluster(sql);
+        log.info(clusterName);
+        long start = System.currentTimeMillis();
+        String tableFullName = distributedTableInfoDetector.searchLocalTableFullName(sql);
+        long end = System.currentTimeMillis();
+        log.info(tableFullName);
+        log.info("It takes " + (end - start) + " ms");
+    }
+
+
 }
